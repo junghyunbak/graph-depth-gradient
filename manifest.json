@@ -1,9 +1,9 @@
 {
   "id": "graph-depth-gradient",
   "name": "Graph Depth Gradient",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.4.0",
-  "description": "Color graph nodes by hop distance from the active note, as a gradient between two colors.",
+  "description": "Color graph nodes by folder depth, as a per-section gradient between two colors.",
   "author": "Jeonghyeon Park",
   "authorUrl": "https://github.com/junghyunbak",
   "isDesktopOnly": true
