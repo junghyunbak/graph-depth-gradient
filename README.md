@@ -1,6 +1,8 @@
 # Graph Depth Gradient
 
-An Obsidian plugin that colors **graph view** nodes by their **folder depth**, as a gradient between two colors — so notes near the vault root look one color and deeply nested notes fade toward another. Defaults to a neutral (achromatic) gradient.
+An Obsidian plugin that colors **graph view** nodes by their **folder depth**, as a gradient between two colors — applied independently per top-level section, so each section's root note looks one color and its deepest notes fade toward another. Defaults to a neutral (achromatic) gradient.
+
+![Graph view colored by folder depth, each top-level section fading from the start color at its root to the end color at its deepest notes](docs/graph_depth_gradient.png)
 
 ## How depth is measured
 
@@ -10,7 +12,7 @@ Each node is colored by how deep its file sits in the folder tree — simply the
 - `area/note.md` → depth `1`
 - `area/topic/sub/note.md` → depth `3`
 
-The depth is mapped onto a gradient: depth `0` gets the **start color**, and the configured **max depth** (and anything deeper) gets the **end color**, with values in between interpolated linearly. Notes that aren't files in the vault (tags, attachments-less/unresolved nodes) keep their original color.
+The gradient is applied **per top-level section** (the first folder in the path). Within each section the depth range is detected dynamically: the **shallowest** note (the section's root) gets the **start color**, the **deepest** descendant gets the **end color**, and depths in between are interpolated linearly. So every section spans the full start→end range regardless of how deep it actually goes — a shallow section like `블로그/` still fades all the way from start to end, and a deep section like `개발/` distributes the gradient across more levels. Files at the vault root (depth `0`, no folder) form their own section and take the start color. Notes that aren't files in the vault (tags, attachments-less/unresolved nodes) keep their original color.
 
 This is stable and independent of which note is selected — the coloring reflects your folder structure, not the active note.
 
@@ -24,9 +26,8 @@ Works in both the global **Graph view** and the **Local graph**.
 
 ## Settings
 
-- **Start color (folder root)** — color for notes at the vault root (depth 0). Default: achromatic (white).
-- **End color (deepest)** — color for the deepest folders. Default: achromatic (dark gray).
-- **Max folder depth** — folder depth mapped to the end color; deeper notes clamp to it.
+- **Start color (section root)** — color for each section's shallowest note (its root). Default: achromatic (white).
+- **End color (deepest)** — color for each section's deepest note. Default: achromatic (dark gray).
 
 ## Notes
 

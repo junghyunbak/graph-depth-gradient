@@ -5,9 +5,8 @@ const { Plugin, PluginSettingTab, Setting } = require("obsidian");
 const GRAPH_VIEW_TYPES = ["graph", "localgraph"];
 
 const DEFAULT_SETTINGS = {
-  startColor: "#ffffff", // folder root (depth 0) — achromatic by default
-  endColor: "#555555",   // deepest folders
-  maxDepth: 4,           // folder depth mapped to the end color
+  startColor: "#ffffff", // shallowest folder depth present — achromatic by default
+  endColor: "#555555",   // deepest folder depth present
 };
 
 function hexToInt(hex) {
@@ -89,26 +88,61 @@ module.exports = class GraphDepthGradient extends Plugin {
     return String(path).split("/").length - 1;
   }
 
+  // section = top-level folder (first path segment). Files at the vault root
+  // share the "" section. Each section gets its own gradient, so a section's
+  // root note takes the start color and its deepest descendant the end color.
+  sectionKey(path) {
+    const parts = String(path).split("/");
+    return parts.length > 1 ? parts[0] : "";
+  }
+
   refresh() {
     const startCol = hexToInt(this.settings.startColor);
     const endCol = hexToInt(this.settings.endColor);
-    const maxDepth = Math.max(1, this.settings.maxDepth);
 
     for (const r of this.renderers) {
-      for (const n of this.nodeList(r)) {
+      const nodes = this.nodeList(r);
+
+      // First pass: per section, find the folder-depth range so each section
+      // spans start→end independently (shallowest note → start color, deepest
+      // descendant → end color).
+      const ranges = new Map();
+      for (const n of nodes) {
+        if (!n || n.id == null) continue;
+        if (!this.app.vault.getAbstractFileByPath(n.id)) continue;
+
+        const section = this.sectionKey(n.id);
+        const depth = this.folderDepth(n.id);
+        const range = ranges.get(section);
+        if (!range) {
+          ranges.set(section, { min: depth, max: depth });
+          continue;
+        }
+
+        if (depth < range.min) range.min = depth;
+        if (depth > range.max) range.max = depth;
+      }
+
+      // Second pass: map each node within its own section's depth range.
+      for (const n of nodes) {
         if (!n || n.id == null) continue;
         if (!("_gdgOrig" in n)) {
           n._gdgOrig = n.color;
         }
+
         // Only color real files (skip tags / unresolved / attachments-less nodes)
         const file = this.app.vault.getAbstractFileByPath(n.id);
         if (!file) {
           n.color = n._gdgOrig;
           continue;
         }
-        const t = Math.min(this.folderDepth(n.id), maxDepth) / maxDepth;
+
+        const range = ranges.get(this.sectionKey(n.id));
+        const span = range.max - range.min;
+        const t = span > 0 ? (this.folderDepth(n.id) - range.min) / span : 0;
         n.color = { a: 1, rgb: lerpInt(startCol, endCol, t) };
       }
+
       if (r.changed) r.changed();
     }
   }
@@ -124,8 +158,8 @@ class GDGSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName("Start color (folder root)")
-      .setDesc("Color for notes at the vault root (depth 0). Default is achromatic (white).")
+      .setName("Start color (section root)")
+      .setDesc("Color for each top-level section's shallowest note (its root). Default is achromatic (white).")
       .addColorPicker((c) =>
         c.setValue(this.plugin.settings.startColor).onChange(async (v) => {
           this.plugin.settings.startColor = v;
@@ -136,21 +170,10 @@ class GDGSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("End color (deepest)")
-      .setDesc("Color for the deepest folders. Default is achromatic (dark gray).")
+      .setDesc("Color for each top-level section's deepest note. Default is achromatic (dark gray).")
       .addColorPicker((c) =>
         c.setValue(this.plugin.settings.endColor).onChange(async (v) => {
           this.plugin.settings.endColor = v;
-          await this.plugin.saveData(this.plugin.settings);
-          this.plugin.refresh();
-        })
-      );
-
-    new Setting(containerEl)
-      .setName("Max folder depth")
-      .setDesc("Folder depth mapped to the end color; deeper notes clamp to it.")
-      .addSlider((s) =>
-        s.setLimits(1, 10, 1).setValue(this.plugin.settings.maxDepth).setDynamicTooltip().onChange(async (v) => {
-          this.plugin.settings.maxDepth = v;
           await this.plugin.saveData(this.plugin.settings);
           this.plugin.refresh();
         })
