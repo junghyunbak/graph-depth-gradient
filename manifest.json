@@ -1,7 +1,7 @@
 {
   "id": "graph-depth-gradient",
   "name": "Graph Depth Gradient",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "minAppVersion": "1.4.0",
   "description": "Color graph nodes by folder depth, as a per-section gradient between two colors.",
   "author": "Jeonghyeon Park",

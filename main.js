@@ -45,9 +45,6 @@ module.exports = class GraphDepthGradient extends Plugin {
     this.registerEvent(this.app.vault.on("rename", () => this.refresh()));
     this.registerEvent(this.app.vault.on("create", () => this.refresh()));
 
-    // Re-apply after the renderer rebuilds its node data.
-    this.registerInterval(window.setInterval(() => this.refresh(), 1200));
-
     this.register(() => this.restoreAll());
   }
 
@@ -66,13 +63,36 @@ module.exports = class GraphDepthGradient extends Plugin {
     for (const type of GRAPH_VIEW_TYPES) {
       for (const leaf of this.app.workspace.getLeavesOfType(type)) {
         const r = leaf.view && leaf.view.renderer;
-        if (r) this.renderers.add(r);
+        if (r) {
+          this.renderers.add(r);
+          this.hookSetData(r);
+        }
       }
     }
   }
 
+  // The renderer rebuilds its node objects (resetting their colors) only inside
+  // setData. Re-apply the gradient right after each rebuild — exact and
+  // immediate, so no periodic polling is needed.
+  hookSetData(r) {
+    if (r._gdgOrigSetData) {
+      return;
+    }
+    const orig = r.setData.bind(r);
+    r._gdgOrigSetData = orig;
+    r.setData = (data) => {
+      const ret = orig(data);
+      this.refresh();
+      return ret;
+    };
+  }
+
   restoreAll() {
     for (const r of this.renderers) {
+      if (r._gdgOrigSetData) {
+        r.setData = r._gdgOrigSetData;
+        delete r._gdgOrigSetData;
+      }
       for (const n of this.nodeList(r)) {
         if (n && "_gdgOrig" in n) {
           n.color = n._gdgOrig;
@@ -140,7 +160,10 @@ module.exports = class GraphDepthGradient extends Plugin {
         const range = ranges.get(this.sectionKey(n.id));
         const span = range.max - range.min;
         const t = span > 0 ? (this.folderDepth(n.id) - range.min) / span : 0;
-        n.color = { a: 1, rgb: lerpInt(startCol, endCol, t) };
+        // Set hue only; preserve whatever alpha is on the node so plugins that
+        // dim via node.color.a (e.g. a search spotlight) aren't reset each refresh.
+        const a = n.color && typeof n.color.a === "number" ? n.color.a : 1;
+        n.color = { a, rgb: lerpInt(startCol, endCol, t) };
       }
 
       if (r.changed) r.changed();
