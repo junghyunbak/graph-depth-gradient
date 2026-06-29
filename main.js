@@ -45,9 +45,6 @@ module.exports = class GraphDepthGradient extends Plugin {
     this.registerEvent(this.app.vault.on("rename", () => this.refresh()));
     this.registerEvent(this.app.vault.on("create", () => this.refresh()));
 
-    // Re-apply after the renderer rebuilds its node data.
-    this.registerInterval(window.setInterval(() => this.refresh(), 1200));
-
     this.register(() => this.restoreAll());
   }
 
@@ -66,13 +63,36 @@ module.exports = class GraphDepthGradient extends Plugin {
     for (const type of GRAPH_VIEW_TYPES) {
       for (const leaf of this.app.workspace.getLeavesOfType(type)) {
         const r = leaf.view && leaf.view.renderer;
-        if (r) this.renderers.add(r);
+        if (r) {
+          this.renderers.add(r);
+          this.hookSetData(r);
+        }
       }
     }
   }
 
+  // The renderer rebuilds its node objects (resetting their colors) only inside
+  // setData. Re-apply the gradient right after each rebuild — exact and
+  // immediate, so no periodic polling is needed.
+  hookSetData(r) {
+    if (r._gdgOrigSetData) {
+      return;
+    }
+    const orig = r.setData.bind(r);
+    r._gdgOrigSetData = orig;
+    r.setData = (data) => {
+      const ret = orig(data);
+      this.refresh();
+      return ret;
+    };
+  }
+
   restoreAll() {
     for (const r of this.renderers) {
+      if (r._gdgOrigSetData) {
+        r.setData = r._gdgOrigSetData;
+        delete r._gdgOrigSetData;
+      }
       for (const n of this.nodeList(r)) {
         if (n && "_gdgOrig" in n) {
           n.color = n._gdgOrig;
